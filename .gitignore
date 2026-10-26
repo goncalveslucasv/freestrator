@@ -42,3 +42,6 @@ next-env.d.ts
 
 # pdf.js assets copied at dev/build time
 /public/pdfjs
+
+# MCP package build output
+/mcp/dist

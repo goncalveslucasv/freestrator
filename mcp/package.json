@@ -1,0 +1,40 @@
+{
+  "name": "freestrator-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Freestrator: lets Claude draw, vectorize images and save .ai files, live-synced with the Freestrator web editor.",
+  "type": "module",
+  "bin": {
+    "freestrator-mcp": "dist/server.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "illustrator",
+    "vector",
+    "vectorize",
+    "svg"
+  ],
+  "homepage": "https://freestrator.vercel.app",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@xmldom/xmldom": "^0.9.12",
+    "immer": "^11.2.9",
+    "pdf-lib": "^1.17.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "sharp": "^0.35.5",
+    "tesseract.js": "^7.0.0",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  }
+}

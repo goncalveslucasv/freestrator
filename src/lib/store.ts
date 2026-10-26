@@ -46,6 +46,8 @@ export interface EditorState {
   clipboard: SceneNode[];
   /** Bumped to ask the canvas to fit an artboard in view. */
   fitRequest: { artboard: number; nonce: number } | null;
+  /** Live link with the MCP server (Claude). */
+  bridge: "off" | "connecting" | "on";
 }
 
 const HISTORY_LIMIT = 100;
@@ -72,6 +74,7 @@ export const useEditor = create<EditorState>(() => ({
   defaultStrokeWidth: 1,
   clipboard: [],
   fitRequest: null,
+  bridge: "off",
 }));
 
 const set = useEditor.setState;
@@ -110,6 +113,15 @@ export function commit(recipe: (draft: Draft<Doc>) => void, coalesce?: string) {
   const merge = coalesce && lastCoalesce?.key === coalesce && now - lastCoalesce.at < 1500 && past.length;
   lastCoalesce = coalesce ? { key: coalesce, at: now } : null;
   set({ doc: next, past: merge ? past : [...past, doc].slice(-HISTORY_LIMIT), future: [], dirty: true });
+}
+
+/** Replaces the whole document with one received from outside (undoable). */
+export function replaceDoc(doc: Doc) {
+  const { doc: prev, past } = get();
+  if (!prev) return loadDoc(doc);
+  lastCoalesce = null;
+  set({ doc, past: [...past, prev].slice(-HISTORY_LIMIT), future: [], txBase: null, dirty: true });
+  pruneSelection();
 }
 
 /** Interactive gestures: begin, update from the base document, end (one undo step). */

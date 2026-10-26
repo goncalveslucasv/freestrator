@@ -668,6 +668,17 @@ textarea {
 .statusbar .right {
   margin-left: auto;
 }
+.bridge-status {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bridge-status.on {
+  color: #3ecf8e;
+}
 
 /* welcome */
 .welcome {
@@ -773,4 +784,82 @@ textarea {
   background: rgba(47, 128, 237, 0.12);
   font-size: 18px;
   pointer-events: none;
+}
+
+/* dialogs */
+.dialog {
+  align-items: stretch;
+  gap: 10px;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dialog-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dialog p {
+  margin: 0;
+  line-height: 1.5;
+}
+.dialog-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.dialog-group legend {
+  padding: 0 4px;
+  color: var(--muted);
+}
+.dialog-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  cursor: pointer;
+}
+.dialog-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.dialog-actions .bridge-status {
+  margin-right: auto;
+  cursor: default;
+}
+.copyable {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.copyable pre {
+  flex: 1;
+  margin: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  background: #262626;
+  border: 1px solid #1d1d1d;
+  border-radius: var(--radius);
+  font-size: 11px;
+  user-select: all;
 }
