@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
+    "ai-file": "^0.1.0",
     "immer": "^11.2.9",
     "next": "16.4.3",
     "pdf-lib": "^1.17.1",
