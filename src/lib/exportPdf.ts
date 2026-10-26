@@ -6,8 +6,8 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, PDFString, StandardFonts, type PDFFont, type PDFRef, type PDFDict } from "pdf-lib";
 import { fonts, images } from "./assets";
-import { nodeBBox } from "./geometry";
-import { apply, mul, type Mat } from "./matrix";
+import { nodeBBox, segsBBox } from "./geometry";
+import { IDENTITY, apply, mul, type Mat } from "./matrix";
 import { layoutText } from "./text";
 import type { Doc, GroupNode, Paint, PathNode, SceneNode, Seg, TextNode } from "./types";
 
@@ -134,24 +134,27 @@ export async function exportPdf(doc: Doc, opts: PdfExportOptions = {}): Promise<
       return gsCache.get(key)!;
     };
 
-    const shading = (paint: Exclude<Paint, { kind: "solid" }>): string => {
+    /** Gradient shading of the colors, or with `alpha` of the stop opacities (gray, for a soft mask). */
+    const shading = (paint: Exclude<Paint, { kind: "solid" }>, alpha = false): string => {
       const stops = [...paint.stops].sort((a, b) => a.offset - b.offset);
       if (stops[0].offset > 0) stops.unshift({ ...stops[0], offset: 0 });
       if (stops.at(-1)!.offset < 1) stops.push({ ...stops.at(-1)!, offset: 1 });
       const fns = [];
       const bounds = [];
       for (let i = 0; i < stops.length - 1; i++) {
-        fns.push(ctx.obj({ FunctionType: 2, Domain: [0, 1], C0: rgb(stops[i].color), C1: rgb(stops[i + 1].color), N: 1 }));
+        const value = (s: (typeof stops)[number]) => (alpha ? [s.opacity ?? 1] : rgb(s.color));
+        fns.push(ctx.obj({ FunctionType: 2, Domain: [0, 1], C0: value(stops[i]), C1: value(stops[i + 1]), N: 1 }));
         if (i > 0) bounds.push(stops[i].offset);
       }
       const fn =
         fns.length === 1
           ? fns[0]
           : ctx.obj({ FunctionType: 3, Domain: [0, 1], Functions: fns, Bounds: bounds, Encode: fns.flatMap(() => [0, 1]) });
+      const ColorSpace = alpha ? "DeviceGray" : "DeviceRGB";
       const dict =
         paint.kind === "linear"
-          ? ctx.obj({ ShadingType: 2, ColorSpace: "DeviceRGB", Coords: [paint.x1, paint.y1, paint.x2, paint.y2], Function: fn, Extend: [true, true] })
-          : ctx.obj({ ShadingType: 3, ColorSpace: "DeviceRGB", Coords: [paint.fx, paint.fy, paint.fr, paint.cx, paint.cy, paint.r], Function: fn, Extend: [true, true] });
+          ? ctx.obj({ ShadingType: 2, ColorSpace, Coords: [paint.x1, paint.y1, paint.x2, paint.y2], Function: fn, Extend: [true, true] })
+          : ctx.obj({ ShadingType: 3, ColorSpace, Coords: [paint.fx, paint.fy, paint.fr, paint.cx, paint.cy, paint.r], Function: fn, Extend: [true, true] });
       const name = `Sh${counter++}`;
       res.Shading.set(name, ctx.register(dict));
       return name;
@@ -226,7 +229,12 @@ export async function exportPdf(doc: Doc, opts: PdfExportOptions = {}): Promise<
       const eo = p.fillRule === "evenodd";
       const geometry = pathOps(p.segs);
       if (p.fill && p.fill.kind !== "solid") {
-        out += `q\n${geometry}${eo ? "W*" : "W"} n\n${p.fill.gt ? `${mat(p.fill.gt)} cm\n` : ""}/${shading(p.fill)} sh\nQ\n`;
+        const area = `${geometry}${eo ? "W*" : "W"} n\n${p.fill.gt ? `${mat(p.fill.gt)} cm\n` : ""}`;
+        // Stop opacities: a luminosity soft mask painted with the same gradient in gray.
+        const mask = p.fill.stops.some((s) => (s.opacity ?? 1) < 1)
+          ? softMask(`q\n${area}/${shading(p.fill, true)} sh\nQ\n`, segsBBox(p.segs, IDENTITY))
+          : null;
+        out += `q\n${mask ? `/${mask} gs\n` : ""}${area}/${shading(p.fill)} sh\nQ\n`;
       }
       const solidFill = p.fill?.kind === "solid";
       const hasStroke = !!p.stroke && p.strokeWidth > 0;
@@ -295,6 +303,22 @@ export async function exportPdf(doc: Doc, opts: PdfExportOptions = {}): Promise<
         }
       }
       return out + "ET\nQ\n";
+    }
+
+    /** ExtGState with a luminosity soft mask drawn by `content` (in the current user space). */
+    function softMask(content: string, box: { x: number; y: number; w: number; h: number } | null): string {
+      const form = ctx.register(
+        ctx.flateStream(content, {
+          Type: "XObject",
+          Subtype: "Form",
+          BBox: box ? [box.x, box.y, box.x + box.w, box.y + box.h] : [-1e5, -1e5, 1e5, 1e5],
+          Group: ctx.obj({ S: "Transparency", CS: "DeviceGray" }),
+          Resources: resourcesDict(),
+        }),
+      );
+      const name = `GS${counter++}`;
+      res.ExtGState.set(name, ctx.obj({ Type: "ExtGState", SMask: ctx.obj({ Type: "Mask", S: "Luminosity", G: form }) }));
+      return name;
     }
 
     async function writeGroup(g: GroupNode): Promise<string> {
