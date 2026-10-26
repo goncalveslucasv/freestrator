@@ -22,7 +22,7 @@ import { BRIDGE_PORT } from "../src/lib/sync";
 import { parseColor, parsePathData, parseTransform, svgToNodes, type XmlNode } from "../src/lib/svgImport";
 import type { Doc, GroupNode, SceneNode } from "../src/lib/types";
 import { recognizeLines, vectorizeRaster, type Detail, type OcrLine } from "../src/lib/vectorize";
-import { selectInEditor, startBridge } from "./bridge";
+import { openEditor, selectInEditor, startBridge } from "./bridge";
 import { bboxStr, docSummary, nodesToSvg, outline } from "./describe";
 import { log } from "./log";
 import { compareRasters, referenceBBox, referenceOnly, renderPair, renderRegion, toPng } from "./raster";
@@ -58,6 +58,7 @@ const image = (png: Buffer, caption: string): CallToolResult => ({
 /** Runs a tool body, turning exceptions into tool errors the model can read. */
 function tool<A>(fn: (args: A) => Promise<CallToolResult> | CallToolResult) {
   return async (args: A): Promise<CallToolResult> => {
+    openEditor();
     try {
       return await fn(args);
     } catch (err) {
@@ -559,6 +560,9 @@ server.registerTool(
 // ---------- start ----------
 
 startBridge(Number(process.env.FREESTRATOR_BRIDGE_PORT) || BRIDGE_PORT);
+// The bridge keeps the process alive, so leave when Claude closes stdin; otherwise orphaned servers
+// keep holding the bridge port.
+process.stdin.on("end", () => process.exit(0));
 server.connect(new StdioServerTransport()).then(
   () => log("Servidor MCP listo (stdio)"),
   (err) => {

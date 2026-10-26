@@ -9,11 +9,14 @@ import { loadDoc, replaceDoc, select, useEditor } from "./store";
 import type { Doc } from "./types";
 
 const STORAGE_KEY = "freestrator:bridge";
+const PORT_KEY = "freestrator:bridge-port";
 const RETRY_MS = 2000;
 const SEND_DELAY_MS = 300;
 
 let ws: WebSocket | null = null;
 let enabled = false;
+/** The MCP server may listen on a later port when another session holds the default one. */
+let port = BRIDGE_PORT;
 let retry: ReturnType<typeof setTimeout> | undefined;
 let sendTimer: ReturnType<typeof setTimeout> | undefined;
 /** Asset ids the server already has (reset on every connection). */
@@ -28,7 +31,7 @@ const send = (msg: BridgeMessage) => ws?.readyState === WebSocket.OPEN && ws.sen
 function connect() {
   clearTimeout(retry);
   setStatus("connecting");
-  const socket = new WebSocket(`ws://127.0.0.1:${BRIDGE_PORT}`);
+  const socket = new WebSocket(`ws://127.0.0.1:${port}`);
   ws = socket;
 
   socket.onopen = async () => {
@@ -107,11 +110,26 @@ export function setBridgeEnabled(on: boolean) {
   }
 }
 
-/** Reconnects on load if the link was on last time. */
+/**
+ * Connects on load when Claude opened this page (`?claude=<port>`, see openEditor in
+ * mcp/bridge.ts), or if the link was on last time.
+ */
 export function restoreBridge() {
+  const url = new URL(location.href);
+  const requested = Number(url.searchParams.get("claude"));
   try {
-    if (localStorage.getItem(STORAGE_KEY) === "1") setBridgeEnabled(true);
+    if (requested > 0) {
+      localStorage.setItem(PORT_KEY, String(requested));
+      url.searchParams.delete("claude");
+      history.replaceState(history.state, "", url);
+    }
+    port = Number(localStorage.getItem(PORT_KEY)) || BRIDGE_PORT;
+    if (requested > 0 || localStorage.getItem(STORAGE_KEY) === "1") setBridgeEnabled(true);
   } catch {
-    // ignore
+    // storage unavailable: still honour the link Claude opened
+    if (requested > 0) {
+      port = requested;
+      setBridgeEnabled(true);
+    }
   }
 }
