@@ -230,6 +230,8 @@ function TextView({ node }: { node: TextNode }) {
         }}
         fontSize={node.fontSize}
         fontFamily={layout.glyphs?.family}
+        fontWeight={layout.glyphs?.weight}
+        fontStyle={layout.glyphs?.italic ? "italic" : undefined}
         textAnchor={node.align && node.align !== "start" ? node.align : undefined}
         fill={paintRef(node.fill, fid)}
         fillOpacity={node.fillOpacity !== 1 ? node.fillOpacity : undefined}

@@ -1,42 +1,44 @@
 # Freestrator
 
-Editor vectorial web al estilo Adobe Illustrator, hecho con Next.js + React, que **abre, edita y guarda archivos `.ai`** directamente en el navegador (el archivo no sale de tu computadora).
+An Adobe Illustrator-style vector editor for the web, built with Next.js + React, that **opens, edits and saves `.ai` files** right in the browser (the file never leaves your computer).
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
 ```
 
-Abrí un `.ai` con **Archivo › Abrir…** (⌘O) o arrastrándolo a la ventana.
+Open an `.ai` file with **Archivo › Abrir…** (⌘O) or by dropping it on the window.
 
-## Qué se puede hacer
+## Features
 
-- **Abrir** `.ai` compatibles con PDF (la opción por defecto de Illustrator desde CS) y PDF. Cada mesa de trabajo se convierte en una página; las capas (OCG) se conservan. Los archivos grandes se leen por rangos, así que uno de 650 MB abre en segundos.
-- **Ver** con alta fidelidad: trazados, grupos de recorte, máscaras de opacidad (luminosidad), modos de fusión, degradados lineales/radiales, degradados de malla, imágenes, texto con su fuente embebida y gestión de color ICC (por ejemplo, documentos Adobe RGB).
-- **Editar**:
-  - Herramientas: Selección (V), Selección directa (A), Pluma (P), Texto (T), Línea (\\), Rectángulo (M), Elipse (L), Cuentagotas (I), Mano (H / Espacio), Zoom (Z).
-  - Mover, escalar (⇧ proporcional, ⌥ desde el centro), rotar (cerca de las esquinas; ⇧ de a 15°), reflejar, alinear, organizar, agrupar, máscaras de recorte, duplicar con ⌥+arrastrar.
-  - Editar nodos y manejadores de curvas con la Selección directa.
-  - Doble clic para entrar a un grupo (modo aislamiento) o editar un texto. El texto editado sigue usando la fuente embebida del archivo para los caracteres que contiene y completa el resto con la misma familia desde Google Fonts.
-  - Panel de propiedades: posición/tamaño, relleno y trazo (sólido o degradado, con paradas editables), grosor, opacidad, modo de fusión, carácter (fuente, tamaño, tracking), reemplazar imagen.
-  - Panel de capas: visibilidad, bloqueo, renombrar (doble clic), reordenar arrastrando.
-  - Deshacer/rehacer (⌘Z / ⇧⌘Z), copiar/cortar/pegar, pegar en el lugar.
-- **Guardar** como `.ai` (⌘S): un PDF multipágina con capas que Illustrator abre como archivo compatible con PDF. También exporta PDF, SVG y PNG (300 ppp) de la mesa activa.
+- **Open** `.ai` files by reading **Illustrator's native data** with [`ai-file`](https://github.com/goncalveslucasv/ai-file) (Rust/WebAssembly codecs, in a Web Worker): real layers and sublayers, artboard names, text with its typeface and Illustrator's exact glyph positions, gradients with per-stop opacity, and embedded images (repeated copies are deduplicated). A 650 MB file opens in about 3.5 s, versus about 7.5 s through its PDF rendition, and the UI stays responsive meanwhile. Legacy PostScript `.ai` files open too.
+- If the file has no native data (saved without "Preserve Illustrator Editing Capabilities") or is a plain PDF, its **PDF rendition** is read with pdf.js instead: each artboard is a page and layers (OCGs) are preserved.
+- **View** with high fidelity: paths, clipping groups, opacity (luminosity) masks, blend modes, linear/radial gradients, gradient meshes, images, text with its embedded font, and ICC color management (e.g. Adobe RGB documents).
+- **Edit**:
+  - Tools: Selection (V), Direct Selection (A), Pen (P), Type (T), Line (\\), Rectangle (M), Ellipse (L), Eyedropper (I), Hand (H / Space), Zoom (Z).
+  - Move, scale (⇧ proportional, ⌥ from the center), rotate (near the corners; ⇧ in 15° steps), reflect, align, arrange, group, clipping masks, duplicate with ⌥+drag.
+  - Edit anchor points and curve handles with Direct Selection.
+  - Double-click to enter a group (isolation mode) or edit text. Edited text keeps using the file's embedded font for the characters it contains and fills in the rest with the same family from Google Fonts.
+  - Properties panel: position/size, fill and stroke (solid or gradient, with editable stops), stroke weight, opacity, blend mode, character (font, size, tracking), replace image.
+  - Layers panel: visibility, lock, rename (double-click), reorder by dragging.
+  - Undo/redo (⌘Z / ⇧⌘Z), copy/cut/paste, paste in place.
+- **Save** as `.ai` (⌘S): a multi-page PDF with layers that Illustrator opens as a PDF-compatible file. The active artboard can also be exported as PDF, SVG and PNG (300 ppi).
 
-## Cómo funciona
+## How it works
 
-| Módulo | Rol |
+| Module | Role |
 | --- | --- |
-| `src/lib/importer.ts` | Carga el `.ai` con pdf.js e **interpreta su lista de operadores** (save/restore, CTM, clips, grupos de transparencia, máscaras suaves, shadings, imágenes, texto) para construir un árbol de escena editable. Luego simplifica el árbol (quita recortes redundantes, convierte "recorte + shading" en una forma con degradado, aplana grupos vacíos). |
-| `src/lib/types.ts` | Modelo de escena: capas › subcapas por mesa › grupos / trazados / imágenes / textos. Toda la geometría está en espacio de documento (pt, y hacia abajo). |
-| `src/lib/render.tsx` | Render SVG de la escena, compartido entre el lienzo y la exportación SVG/PNG. |
-| `src/lib/store.ts`, `ops.ts`, `actions.ts` | Estado (zustand + immer, historial con fusión de cambios continuos), operaciones sobre el árbol y comandos del editor. |
-| `src/components/` | Interfaz: lienzo con herramientas y manijas, barra de herramientas, paneles de propiedades, capas y mesas de trabajo, menús. |
-| `src/lib/exportPdf.ts` | Escribe el PDF/.ai con pdf-lib: streams de contenido propios, shadings, máscaras de luminosidad, grupos de transparencia, fuentes embebidas (TJ con las posiciones originales) y capas como contenido opcional. |
+| `src/lib/native/` | Native reading: `worker.ts` decompresses (zstd/zlib in WebAssembly) and parses the native stream with `ai-file` off the main thread; `convert.ts` maps Illustrator's model (art space, y up) to the scene, splits the content by artboard and encodes images (PNG in Rust when they have alpha, JPEG otherwise). |
+| `src/lib/importer.ts` | Tries native reading first. Without native data, loads the `.ai` with pdf.js and **interprets its operator list** (save/restore, CTM, clips, transparency groups, soft masks, shadings, images, text) to build an editable scene tree. It then simplifies the tree (drops redundant clips, turns "clip + shading" into a gradient-filled shape, flattens empty groups). |
+| `src/lib/types.ts` | Scene model: layers › per-artboard sublayers › groups / paths / images / text. All geometry is in document space (pt, y down). |
+| `src/lib/render.tsx` | SVG rendering of the scene, shared by the canvas and the SVG/PNG export. |
+| `src/lib/store.ts`, `ops.ts`, `actions.ts` | State (zustand + immer, history that merges continuous changes), tree operations and editor commands. |
+| `src/components/` | UI: canvas with tools and handles, toolbar, properties, layers and artboards panels, menus. |
+| `src/lib/exportPdf.ts` | Writes the PDF/.ai with pdf-lib: hand-written content streams, shadings, luminosity masks, transparency groups, embedded fonts (TJ with the original positions) and layers as optional content. |
 
-## Limitaciones conocidas
+## Known limitations
 
-- Los `.ai` guardados **sin** "Crear archivo compatible con PDF" (o en formato PostScript anterior a CS) no traen una versión PDF y no se pueden abrir.
-- Los datos privados de Illustrator (efectos en vivo, símbolos, estilos de texto de área, etc.) no se leen: se edita el arte tal como se ve. Al guardar, Illustrator abre el archivo como PDF.
-- Los degradados de malla se rasterizan al importar.
-- Los colores se convierten a sRGB al abrir (según el perfil ICC del documento) y se guardan en RGB.
+- Native reading: live effects are shown and edited as their expanded result; area text and text on a path without composed lines, symbols, linked art and other plugin objects are skipped (a warning is logged to the console). Patterns are shown with a gray fill. CMYK colors are converted to RGB without an ICC profile. Text uses the real family loaded from Google Fonts, since the native stream doesn't carry embedded fonts.
+- PDF fallback: Illustrator's private data isn't read, so you edit the artwork as it looks. Colors are converted to sRGB using the document's ICC profile.
+- Saved files open in Illustrator as PDF (the native stream isn't written yet).
+- Gradient meshes are rasterized on import.

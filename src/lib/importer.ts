@@ -1,13 +1,17 @@
-// Imports a PDF-compatible Adobe Illustrator file (.ai) — or any PDF — into an editable scene graph.
+// Imports an Adobe Illustrator file (.ai) — or any PDF — into an editable scene graph.
 //
-// Modern .ai files embed a full PDF rendition of the artwork (one page per artboard). We let pdf.js
-// parse it and then interpret its operator list (paths, clips, soft masks, transparency groups,
+// .ai files that keep Illustrator's native data are read natively with ai-file (Rust/WebAssembly
+// codecs, in a Web Worker): real layers, editable text and the objects as the designer built them.
+//
+// Otherwise we fall back to the PDF rendition modern .ai files embed (one page per artboard): pdf.js
+// parses it and we interpret its operator list (paths, clips, soft masks, transparency groups,
 // shadings, images and text) into vector nodes instead of rasterising it.
 
 import type { PDFPageProxy } from "pdfjs-dist";
 import { fonts, images, pdfHandles, parseFontName, resetAssets, ensureWebFont, type FontAsset } from "./assets";
 import { bboxContains, newId, rectSegs, segsBBox, transformBBox, type BBox } from "./geometry";
 import { IDENTITY, inv, mul, scale, translate, type Mat } from "./matrix";
+import { importNative } from "./native";
 import type {
   Artboard,
   BlendMode,
@@ -33,13 +37,26 @@ export async function loadPdfjs() {
 const ARTBOARD_GAP = 72;
 
 export async function importAiFile(blob: Blob, fileName: string, onProgress: ProgressFn = () => {}): Promise<Doc> {
-  const pdfjs = await loadPdfjs();
   await resetAssets();
+  const name = fileName.replace(/\.(ai|pdf|eps)$/i, "");
 
   onProgress("Leyendo encabezado…", 0);
   const header = new Uint8Array(await blob.slice(0, Math.min(blob.size, 1 << 16)).arrayBuffer());
   const headText = new TextDecoder("latin1").decode(header.slice(0, 1024));
-  if (!headText.includes("%PDF")) {
+  const isPdf = headText.includes("%PDF");
+
+  try {
+    const doc = await importNative(blob, name, onProgress);
+    if (doc) return doc;
+  } catch (err) {
+    // The PDF rendition is still usable when the native data can't be read.
+    if (!isPdf) throw err;
+    console.warn("Native reading failed, falling back to the PDF rendition:", err);
+    await resetAssets();
+  }
+
+  const pdfjs = await loadPdfjs();
+  if (!isPdf) {
     if (headText.includes("%!PS-Adobe")) {
       throw new Error(
         "Este .ai fue guardado sin contenido compatible con PDF (formato PostScript antiguo). " +
@@ -136,7 +153,7 @@ export async function importAiFile(blob: Blob, fileName: string, onProgress: Pro
   for (const f of fonts.values()) ensureWebFont(f.family);
   onProgress("Listo", 1);
 
-  return { name: fileName.replace(/\.(ai|pdf)$/i, ""), artboards, layers: finalLayers };
+  return { name, artboards, layers: finalLayers };
 }
 
 const LAYER_COLORS = ["#4f8cff", "#ff4f6d", "#3ecf8e", "#ffb547", "#b97cff", "#2ad4d4"];

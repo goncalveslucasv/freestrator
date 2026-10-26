@@ -11,8 +11,8 @@ export interface TextRun {
 }
 
 export interface TextLayout {
-  /** Exact glyph run from the source file. */
-  glyphs?: { chars: string; xs: number[]; family: string };
+  /** Exact glyph run from the source file. Without an embedded font, `chars` are unicode in a fallback family. */
+  glyphs?: { chars: string; xs: number[]; family: string; weight?: number; italic?: boolean };
   /** One entry per line; each line is split into runs by font. */
   lines?: TextRun[][];
   lineHeight: number;
@@ -32,6 +32,10 @@ export function layoutText(n: TextNode): TextLayout {
   const lineHeight = n.fontSize * 1.2;
   if (n.glyphs && font?.loadedName) {
     return { glyphs: { ...n.glyphs, family: quote(font.loadedName) }, lineHeight };
+  }
+  // Native .ai text: exact positions from Illustrator's layout, drawn with the real family.
+  if (n.glyphs && !n.font) {
+    return { glyphs: { ...n.glyphs, family: fallbackFamily(n), weight: n.weight, italic: n.italic }, lineHeight };
   }
   const fallback: TextRun = { text: "", embedded: false, family: fallbackFamily(n), weight: n.weight, italic: n.italic };
   const lines = n.text.split("\n").map((line) => {
