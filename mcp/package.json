@@ -1,6 +1,6 @@
 {
   "name": "freestrator-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Freestrator: lets Claude draw, vectorize images and save .ai files, live-synced with the Freestrator web editor.",
   "type": "module",
   "bin": {
