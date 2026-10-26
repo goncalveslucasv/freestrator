@@ -1,24 +1,14 @@
 "use client";
 
 import { renderToStaticMarkup } from "react-dom/server";
-import { fonts, images } from "./assets";
+import { bytesToBase64, fonts, images } from "./assets";
 import { walk } from "./geometry";
 import { NodeView, RenderContext, type RenderOptions } from "./render";
 import type { Doc, GroupNode, SceneNode } from "./types";
 
+// Also runs in Node (MCP server), so no FileReader.
 export async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
+  return `data:${blob.type || "application/octet-stream"};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`;
 }
 
 /** Layers restricted to the content of one artboard. */

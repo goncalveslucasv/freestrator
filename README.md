@@ -23,6 +23,25 @@ Abrí un `.ai` con **Archivo › Abrir…** (⌘O) o arrastrándolo a la ventana
   - Deshacer/rehacer (⌘Z / ⇧⌘Z), copiar/cortar/pegar, pegar en el lugar.
 - **Guardar** como `.ai` (⌘S): un PDF multipágina con capas que Illustrator abre como archivo compatible con PDF. También exporta PDF, SVG y PNG (300 ppp) de la mesa activa.
 
+## Vectorizar imágenes
+
+Con **Objeto › Vectorizar imagen…** convertís la imagen seleccionada (o la foto de referencia) en formas editables, sin salir del navegador:
+- La paleta ignora el antialiasing.
+- Los rectángulos, círculos y rectángulos redondeados se convierten en figuras exactas.
+- Con OCR opcional, el texto sale como texto editable.
+
+Es determinista: la misma imagen da siempre el mismo resultado. El algoritmo está en `src/lib/vectorize/`.
+
+## Claude (MCP)
+
+Claude puede usar Freestrator mediante el servidor MCP `freestrator-mcp`, que corre en tu computadora:
+- dibuja escribiendo SVG,
+- vectoriza,
+- compara su resultado con la imagen original,
+- guarda en `.ai`.
+
+Con **Claude › Conectar con Claude…**, el editor web (también el publicado en https://freestrator.vercel.app) se sincroniza en vivo con la sesión de Claude. Ver [`mcp/README.md`](mcp/README.md).
+
 ## Cómo funciona
 
 | Módulo | Rol |

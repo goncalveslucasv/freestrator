@@ -12,15 +12,20 @@ import {
   nudgeSelection,
   openFile,
   paste,
+  placeReferenceImage,
   releaseClipSelection,
   selectAll,
   ungroupSelection,
+  vectorizableImage,
 } from "@/lib/actions";
+import { restoreBridge, setBridgeEnabled } from "@/lib/bridge";
 import { walk } from "@/lib/geometry";
 import { locate } from "@/lib/ops";
+import { isReferenceLayer } from "@/lib/reference";
 import { commit, redo, requestFit, select, setTool, setView, undo, useEditor } from "@/lib/store";
 import type { Doc } from "@/lib/types";
 import { Canvas } from "./Canvas";
+import { ConnectDialog, VectorizeDialog } from "./Dialogs";
 import { ArtboardsPanel, LayersPanel } from "./LayersPanel";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { TOOL_KEYS, Toolbar } from "./Toolbar";
@@ -29,8 +34,10 @@ const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigat
 const MOD = isMac ? "⌘" : "Ctrl+";
 
 async function saveAs(kind: "ai" | "pdf" | "svg" | "png") {
-  const { doc, activeArtboard } = useEditor.getState();
-  if (!doc) return;
+  const { doc: current, activeArtboard } = useEditor.getState();
+  if (!current) return;
+  // The reference photo is a tracing aid, not part of the artwork.
+  const doc = { ...current, layers: current.layers.filter((l) => !isReferenceLayer(l)) };
   useEditor.setState({ loading: { message: "Preparando exportación…", fraction: 0 } });
   try {
     const { saveBlob } = await import("@/lib/exportSvg");
@@ -147,8 +154,11 @@ export function Editor() {
   const pastLen = useEditor((s) => s.past.length);
   const futureLen = useEditor((s) => s.future.length);
   const [tab, setTab] = useState<"props" | "artboards">("props");
+  const bridge = useEditor((s) => s.bridge);
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const referenceInput = useRef<HTMLInputElement>(null);
+  const [dialog, setDialog] = useState<"vectorize" | "connect" | null>(null);
 
   const open = () => fileInput.current?.click();
 
@@ -213,6 +223,8 @@ export function Editor() {
     if (process.env.NODE_ENV !== "production") import("@/lib/debug").then((m) => m.installDebugHandle());
   }, []);
 
+  useEffect(restoreBridge, []);
+
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (useEditor.getState().dirty) e.preventDefault();
@@ -261,6 +273,8 @@ export function Editor() {
     { label: "Desbloquear todo", shortcut: `⌥${MOD}2`, action: () => resetAll("locked", false), disabled: !doc },
     { label: "Ocultar selección", shortcut: `${MOD}3`, action: () => setFlagOnSelection("visible", false), disabled: !hasSel },
     { label: "Mostrar todo", shortcut: `⌥${MOD}3`, action: () => resetAll("visible", true), disabled: !doc },
+    "sep",
+    { label: "Vectorizar imagen…", action: () => setDialog("vectorize"), disabled: !doc || !vectorizableImage() },
   ];
   const viewMenu: MenuItem[] = [
     { label: "Acercar", shortcut: `${MOD}+`, action: () => zoomBy(1.5), disabled: !doc },
@@ -273,6 +287,14 @@ export function Editor() {
       checked: clipArtboards,
       action: () => useEditor.setState({ clipArtboards: !clipArtboards }),
     },
+  ];
+
+  const claudeMenu: MenuItem[] = [
+    { label: "Conectar con Claude…", checked: bridge !== "off", action: () => setDialog("connect") },
+    { label: "Colocar imagen de referencia…", action: () => referenceInput.current?.click() },
+    { label: "Vectorizar imagen…", action: () => setDialog("vectorize"), disabled: !doc || !vectorizableImage() },
+    "sep",
+    { label: "Desconectar", action: () => setBridgeEnabled(false), disabled: bridge === "off" },
   ];
 
   return (
@@ -304,6 +326,7 @@ export function Editor() {
         <Menu title="Edición" items={editMenu} />
         <Menu title="Objeto" items={objectMenu} />
         <Menu title="Ver" items={viewMenu} />
+        <Menu title="Claude" items={claudeMenu} />
         <div className="doc-title">
           {doc ? (
             <>
@@ -330,6 +353,17 @@ export function Editor() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (file) openFile(file);
+        }}
+      />
+      <input
+        ref={referenceInput}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) placeReferenceImage(file);
         }}
       />
 
@@ -378,6 +412,11 @@ export function Editor() {
             ▶
           </button>
           <span className="muted">{selection.length ? `${selection.length} seleccionado(s)` : "Sin selección"}</span>
+          {bridge !== "off" ? (
+            <button className={`bridge-status ${bridge}`} title="Conexión con Claude (servidor MCP local)" onClick={() => setDialog("connect")}>
+              {bridge === "on" ? "● Claude conectado" : "○ Esperando a Claude…"}
+            </button>
+          ) : null}
           <span className="muted right">Espacio: mano · Doble clic: entrar al grupo / editar texto · ⇧: proporcional · ⌥: duplicar</span>
         </footer>
       ) : null}
@@ -393,6 +432,8 @@ export function Editor() {
           </div>
         </div>
       ) : null}
+      {dialog === "vectorize" ? <VectorizeDialog onClose={() => setDialog(null)} /> : null}
+      {dialog === "connect" ? <ConnectDialog onClose={() => setDialog(null)} /> : null}
       {error ? (
         <div className="toast error" onClick={() => useEditor.setState({ error: null })}>
           {error}

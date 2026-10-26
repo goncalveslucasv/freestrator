@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bundled MCP server (npm run mcp:build).
+    "mcp/dist/**",
   ]),
 ]);
 
